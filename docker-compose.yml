@@ -1,0 +1,64 @@
+services:
+  kafka:
+    image: apache/kafka:latest
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # mTLS Configuration: Define listeners for different protocols
+      # PLAINTEXT: Internal listener (not exposed externally)
+      # CONTROLLER: For KRaft controller communication
+      # SSL: External listener for mTLS-enabled client connections on port 29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,SSL://0.0.0.0:29092
+      # mTLS Configuration: Advertised listener tells clients how to connect
+      # Only SSL listener is advertised, ensuring all external connections use mTLS
+      KAFKA_ADVERTISED_LISTENERS: SSL://localhost:29092
+      # mTLS Configuration: Inter-broker communication uses SSL for secure broker-to-broker communication
+      KAFKA_INTER_BROKER_LISTENER_NAME: SSL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # mTLS Configuration: Security protocol mapping defines which listener uses which security protocol
+      # SSL listener uses SSL protocol for mTLS authentication
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,SSL:SSL,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+
+      # =========================== MTLS ==============================================================
+      # mTLS Configuration: Server keystore contains the broker's certificate and private key
+      # This is used for server authentication (server presents this cert to clients)
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.server.keystore.jks
+      # mTLS Configuration: Credentials file containing the password for the keystore
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: creds
+      # mTLS Configuration: Credentials file containing the password for the private key in the keystore
+      KAFKA_SSL_KEY_CREDENTIALS: creds
+      # mTLS Configuration: Server truststore contains trusted CA certificates
+      # Used to verify client certificates during mTLS handshake
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.server.truststore.jks
+      # mTLS Configuration: Credentials file containing the password for the truststore
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: creds
+      # mTLS Configuration: Disable hostname verification (set to empty string)
+      # In development/testing, this allows connections without strict hostname matching
+      # In production, consider using "https" for proper hostname verification
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: " "
+      # mTLS Configuration: Enable mutual TLS authentication
+      # "requested" means the server requests client certificates but allows connections without them
+      # Use "required" in production to enforce mandatory client certificate authentication
+      KAFKA_SSL_CLIENT_AUTH: requested
+      # =========================== MTLS ==============================================================
+      
+      KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+      # mTLS Configuration: Super users with permissions to perform administrative operations
+      # First user matches the certificate subject (CN=localhost) used for mTLS authentication
+      # ANONYMOUS user is included for controller communication
+      KAFKA_SUPER_USERS: 'User:CN=localhost,OU=TEST,O=LYDTECH,L=London,ST=LN,C=UK;User:ANONYMOUS'
+    volumes:
+      # mTLS Configuration: Mount server certificates directory
+      # Contains keystore, truststore, and credentials files needed for mTLS
+      - ./certCreation/secrets/server:/etc/kafka/secrets
+      - kafka-data:/var/lib/kafka/data
+
+volumes:
+  kafka-data:
